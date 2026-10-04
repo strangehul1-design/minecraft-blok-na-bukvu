@@ -186,7 +186,7 @@ kbd{font:600 12px/1 var(--font-body);padding:2px 6px;border:1px solid var(--line
     en: "ABCDEFGHIJKLMNOPQRSTVWY".split("")
   };
   const STEP = 30;          // шаг времени, сек
-  const MAX = 600;          // максимум в списке, сек
+  const MAX = 900;          // максимум в списке, сек
   const HISTORY_SIZE = 8;
 
   const $ = id => document.getElementById(id);
@@ -213,8 +213,8 @@ kbd{font:600 12px/1 var(--font-body);padding:2px 6px;border:1px solid var(--line
     tmin.add(new Option(fmt(s), s));
     tmax.add(new Option(fmt(s), s));
   }
-  tmin.value = store.get("tmin", "60");  if (!tmin.value) tmin.value = "60";
-  tmax.value = store.get("tmax", "300"); if (!tmax.value) tmax.value = "300";
+  tmin.value = store.get("tmin2", "30");  if (!tmin.value) tmin.value = "30";
+  tmax.value = store.get("tmax2", "480"); if (!tmax.value) tmax.value = "480";
 
   function times() {
     let a = +tmin.value, b = +tmax.value;
@@ -385,7 +385,7 @@ kbd{font:600 12px/1 var(--font-body);padding:2px 6px;border:1px solid var(--line
     roll();
   }));
 
-  [tmin, tmax].forEach(s => s.addEventListener("change", () => store.set(s.id, s.value)));
+  [tmin, tmax].forEach(s => s.addEventListener("change", () => store.set(s.id + "2", s.value)));
 
   document.addEventListener("keydown", e => {
     if (e.target !== document.body && e.target !== document.documentElement) return;
