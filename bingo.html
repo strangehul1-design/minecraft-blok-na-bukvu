@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Бинго-дуэль</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600&family=Pixelify+Sans:wght@500;700&display=swap">
+<style>
+/* Layout: one column — code form, scoreboard with timer, 5×5 card, event feed */
+:root{
+  --bg:#E7EAE3; --surface:#F6F7F3; --fg:#1D221B; --muted:#5F685A; --line:#C8CEC1;
+  --free:#DDE1D8; --edge:#2A2F27; --gold:#9A6B00;
+  --p0:#3F8F22; --p1:#C23A2A; --p2:#2F67C9; --p3:#B88A12;
+  --font-display:"Pixelify Sans", ui-monospace, "Courier New", monospace;
+  --font-body:"Golos Text", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#171A16; --surface:#21251F; --fg:#E6EAE0; --muted:#98A190; --line:#343A2F;
+    --free:#2A2F27; --edge:#090B08; --gold:#F2C14E;
+    --p0:#5DBB38; --p1:#E2533F; --p2:#4F8BEA; --p3:#E0B02F;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#171A16; --surface:#21251F; --fg:#E6EAE0; --muted:#98A190; --line:#343A2F;
+  --free:#2A2F27; --edge:#090B08; --gold:#F2C14E;
+  --p0:#5DBB38; --p1:#E2533F; --p2:#4F8BEA; --p3:#E0B02F;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 var(--font-body)}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--p0);outline-offset:2px}
+.wrap{max-width:640px;margin:0 auto;padding-inline:16px;padding-block:28px 48px;display:grid;gap:22px}
+
+.head{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:end;justify-content:space-between}
+.head h1{margin:0;font:700 clamp(28px,7vw,40px)/1.1 var(--font-display)}
+.head p{margin:4px 0 0;color:var(--muted)}
+.join{display:flex;gap:8px}
+.join input{width:9ch;padding:9px 10px;border:2px solid var(--line);background:var(--surface);font:700 18px/1 var(--font-display);text-transform:uppercase;letter-spacing:.08em}
+.join button{padding:9px 14px;border:2px solid var(--fg);background:var(--fg);color:var(--bg);font-weight:600;cursor:pointer}
+
+.label{font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+
+.board{display:grid;gap:12px}
+.top{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;justify-content:space-between}
+.players{display:flex;flex-wrap:wrap;gap:8px}
+.player{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border:2px solid var(--line)}
+.player i{width:12px;height:12px;background:var(--c)}
+.player b{font:700 18px/1 var(--font-display);font-variant-numeric:tabular-nums}
+.player.left{opacity:.5}
+.timer{font:700 32px/1 var(--font-display);font-variant-numeric:tabular-nums}
+.status{margin:0;color:var(--muted);min-height:1.5em}
+.status.win{color:var(--gold);font-weight:600}
+
+.card{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;padding:4px;background:var(--edge)}
+.cell{aspect-ratio:1/1;max-width:100%;min-width:0;display:grid;place-items:center;padding:4px;text-align:center;
+  background:var(--free);color:var(--fg);font-size:clamp(10px,2.6vw,13px);line-height:1.2;font-weight:500;
+  overflow-wrap:anywhere;hyphens:auto;position:relative}
+.cell.hidden{font:700 22px/1 var(--font-display);color:var(--muted)}
+.cell.owned{color:#fff;text-shadow:0 1px 0 rgba(0,0,0,.45)}
+.cell.threat::after{content:"";position:absolute;inset:2px;border:2px dashed var(--t);animation:pulse 1s steps(2) infinite}
+@keyframes pulse{50%{opacity:0}}
+
+.feed{display:grid;gap:4px;margin:0;padding:0;list-style:none;font-size:14px}
+.feed li{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+.feed time{color:var(--muted);font-variant-numeric:tabular-nums;flex:none}
+
+.howto{display:grid;gap:8px;padding:16px;background:var(--surface);border:2px solid var(--line)}
+.howto h2{margin:0;font:700 20px/1.2 var(--font-display)}
+.howto ul{margin:0;padding-left:18px;display:grid;gap:4px}
+code{font:600 14px/1.4 ui-monospace,Consolas,monospace;background:var(--bg);padding:1px 5px}
+
+@media (prefers-reduced-motion: reduce){.cell.threat::after{animation:none}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header class="head">
+    <div>
+      <h1>Бинго-дуэль</h1>
+      <p>Карточка игры вживую: кто какие блоки уже добыл.</p>
+    </div>
+    <form class="join" id="join">
+      <input id="code" maxlength="12" placeholder="КОД" autocomplete="off" spellcheck="false" aria-label="Код комнаты">
+      <button type="submit">Смотреть</button>
+    </form>
+  </header>
+
+  <section class="board" id="board" hidden>
+    <div class="top">
+      <div class="players" id="players"></div>
+      <div class="timer" id="timer">0:00</div>
+    </div>
+    <p class="status" id="status">Подключаюсь…</p>
+    <div class="card" id="card"></div>
+    <div class="label">Ходы</div>
+    <ul class="feed" id="feed"></ul>
+  </section>
+
+  <section class="howto">
+    <h2>Как играть</h2>
+    <ul>
+      <li>Нужен мод «Блок на букву» для NeoForge 1.21.1.</li>
+      <li>Один пишет в игре <code>/bingo new</code> и получает код комнаты.</li>
+      <li>Второй пишет <code>/bingo join КОД</code>, потом кто-нибудь — <code>/bingo start</code>.</li>
+      <li>Добыл блок с карточки — клетка твоя. В режиме локаут сопернику её уже не взять.</li>
+      <li>Побеждает тот, кто первым соберёт линию из 5 клеток: ряд, столбец или диагональ.</li>
+      <li>Эта страница показывает игру по коду — например, второму игроку с телефона.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(() => {
+  const TOPIC_PREFIX = "blok-bingo-";
+  const SIZE = 5, CELLS = 25, COUNTDOWN_MS = 3000, MAX_PLAYERS = 4;
+  const LINES = (() => {
+    const l = [];
+    for (let r = 0; r < SIZE; r++) l.push([...Array(SIZE)].map((_, c) => r * SIZE + c));
+    for (let c = 0; c < SIZE; c++) l.push([...Array(SIZE)].map((_, r) => r * SIZE + c));
+    l.push([...Array(SIZE)].map((_, k) => k * (SIZE + 1)));
+    l.push([...Array(SIZE)].map((_, k) => (k + 1) * (SIZE - 1)));
+    return l;
+  })();
+
+  const $ = id => document.getElementById(id);
+  const boardEl = $("board"), playersEl = $("players"), timerEl = $("timer"), statusEl = $("status"),
+        cardEl = $("card"), feedEl = $("feed"), codeEl = $("code");
+
+  let es = null, catchUpTimer = null, seen = new Set(), connected = false, code = null;
+  let s = fresh();
+
+  function fresh() {
+    return { phase: "connecting", players: new Map(), names: [], lockout: true,
+             owners: [...Array(CELLS)].map(() => []), startMs: 0, finishedMs: 0, winner: null, feed: [] };
+  }
+  function resetRound() {
+    s.names = []; s.owners = [...Array(CELLS)].map(() => []);
+    s.startMs = 0; s.finishedMs = 0; s.winner = null;
+  }
+
+  // ---------- те же правила, что в моде ----------
+  const claimable = (i, pid) => !s.owners[i].includes(pid) && (!s.lockout || s.owners[i].length === 0);
+  const cellsOf = pid => s.owners.filter(o => o.includes(pid)).length;
+  const hasLine = pid => LINES.some(line => line.every(i => s.owners[i].includes(pid)));
+  function threats(pid) {
+    const out = new Set();
+    for (const line of LINES) {
+      let have = 0, free = -1;
+      for (const i of line) { if (s.owners[i].includes(pid)) have++; else if (claimable(i, pid)) free = i; }
+      if (have === SIZE - 1 && free >= 0) out.add(free);
+    }
+    return out;
+  }
+  function leader() {
+    let best = null, bestN = -1, tie = false;
+    for (const id of s.players.keys()) {
+      const n = cellsOf(id);
+      if (n > bestN) { best = id; bestN = n; tie = false; } else if (n === bestN) tie = true;
+    }
+    return tie ? null : best;
+  }
+  const nameOf = id => s.players.get(id)?.name ?? "Игрок";
+  const colorOf = id => `var(--p${Math.min(s.players.get(id)?.order ?? 0, 3)})`;
+
+  function apply(msg) {
+    let b;
+    try { b = JSON.parse(msg.message); } catch { return; }
+    if (!b || typeof b !== "object" || !b.t || !b.id) return;
+    const when = msg.time * 1000;
+    if (b.t !== "leave" && b.p) addPlayer(b.id, b.p, when);
+    if (b.t === "card" && Array.isArray(b.ids) && b.ids.length === CELLS) {
+      resetRound();
+      s.names = Array.isArray(b.names) && b.names.length === CELLS ? b.names : b.ids.map(prettyId);
+      s.lockout = b.mode !== "classic";
+      s.phase = "lobby";
+      log(when, `Новая карточка, режим ${s.lockout ? "локаут" : "обычный"}`);
+    } else if (b.t === "start" && s.phase === "lobby") {
+      s.phase = "playing";
+      s.startMs = when + COUNTDOWN_MS;
+      log(when, `${nameOf(b.id)} начал игру`);
+    } else if (b.t === "claim" && s.phase === "playing" && s.players.has(b.id)) {
+      const i = b.i;
+      if (!Number.isInteger(i) || i < 0 || i >= CELLS || !claimable(i, b.id)) return;
+      s.owners[i].push(b.id);
+      log(when, `${nameOf(b.id)} ${s.lockout ? "забрал" : "отметил"} «${s.names[i]}»`, b.id);
+      if (hasLine(b.id)) finish(b.id, true, when);
+      else if (s.lockout && s.owners.every(o => o.length)) finish(leader(), false, when);
+    } else if (b.t === "leave" && s.players.has(b.id)) {
+      s.players.get(b.id).left = true;
+      log(when, `${nameOf(b.id)} вышел`);
+    }
+  }
+  function addPlayer(id, name, when) {
+    const p = s.players.get(id);
+    if (p) { if (p.left) { p.left = false; p.name = name; } return; }
+    if (s.players.size >= MAX_PLAYERS) return;
+    s.players.set(id, { name, order: s.players.size, left: false });
+    log(when, `${name} зашёл в комнату`, id);
+  }
+  function finish(winner, byLine, when) {
+    s.winner = winner ?? "";
+    s.phase = "finished";
+    s.finishedMs = Math.max(0, when - s.startMs);
+    log(when, winner ? `${nameOf(winner)} победил: ${byLine ? "собрал линию" : "больше клеток"}` : "Ничья", winner);
+  }
+  function log(when, text, who) {
+    s.feed.unshift({ when, text, who });
+    if (s.feed.length > 30) s.feed.length = 30;
+  }
+  const prettyId = id => id.replace(/_/g, " ");
+
+  // ---------- связь с комнатой ----------
+  function connect(raw) {
+    const c = String(raw || "").trim().toUpperCase();
+    if (!/^[A-Z0-9]{4,12}$/.test(c)) return;
+    disconnect();
+    code = c; s = fresh(); seen = new Set();
+    codeEl.value = c;
+    boardEl.hidden = false;
+    document.title = "Бинго " + c;
+    const topic = TOPIC_PREFIX + c;
+    es = new EventSource(`https://ntfy.sh/${topic}/sse?since=all`);
+    es.onopen = () => { connected = true; render(); };
+    es.onerror = () => { connected = false; render(); };
+    es.onmessage = e => receive(e.data);
+    // сообщение, отправленное прямо перед подключением, может не попасть в историю — дочитываем
+    catchUpTimer = setTimeout(async () => {
+      try {
+        const text = await (await fetch(`https://ntfy.sh/${topic}/json?poll=1&since=all`)).text();
+        text.split("\n").forEach(line => line.trim() && receive(line));
+      } catch {}
+    }, 3000);
+    render();
+  }
+  function disconnect() {
+    if (es) es.close();
+    es = null; connected = false;
+    clearTimeout(catchUpTimer);
+  }
+  function receive(data) {
+    let msg;
+    try { msg = JSON.parse(data); } catch { return; }
+    if (msg.event !== "message" || seen.has(msg.id)) return;
+    seen.add(msg.id);
+    apply(msg);
+    render();
+  }
+
+  // ---------- отрисовка ----------
+  const fmt = ms => { const t = Math.floor(ms / 1000); return Math.floor(t / 60) + ":" + String(t % 60).padStart(2, "0"); };
+  const clock = ms => new Date(ms).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  const revealed = () => (s.phase === "playing" && Date.now() >= s.startMs) || s.phase === "finished";
+
+  function render() {
+    if (!code) return;
+    playersEl.replaceChildren(...[...s.players].map(([id, p]) => {
+      const el = document.createElement("div");
+      el.className = "player" + (p.left ? " left" : "");
+      el.style.setProperty("--c", colorOf(id));
+      const dot = document.createElement("i");
+      const name = document.createElement("span"); name.textContent = p.name;
+      const n = document.createElement("b"); n.textContent = cellsOf(id);
+      el.append(dot, name, n);
+      return el;
+    }));
+
+    statusEl.className = "status" + (s.phase === "finished" && s.winner ? " win" : "");
+    statusEl.textContent = statusText();
+
+    const show = revealed();
+    const danger = new Map();
+    if (s.phase === "playing") for (const id of s.players.keys()) for (const i of threats(id)) danger.set(i, id);
+    cardEl.replaceChildren(...s.owners.map((owners, i) => {
+      const el = document.createElement("div");
+      el.className = "cell";
+      if (!s.names.length || !show) { el.classList.add("hidden"); el.textContent = "?"; return el; }
+      el.textContent = s.names[i];
+      if (owners.length) {
+        el.classList.add("owned");
+        const stops = owners.map((id, k) => `${colorOf(id)} ${k / owners.length * 100}% ${(k + 1) / owners.length * 100}%`);
+        el.style.background = `linear-gradient(90deg, ${stops.join(", ")})`;
+      }
+      if (danger.has(i)) { el.classList.add("threat"); el.style.setProperty("--t", colorOf(danger.get(i))); }
+      return el;
+    }));
+
+    feedEl.replaceChildren(...s.feed.slice(0, 12).map(f => {
+      const li = document.createElement("li");
+      const t = document.createElement("time"); t.textContent = clock(f.when);
+      const span = document.createElement("span"); span.textContent = f.text;
+      if (f.who) span.style.color = colorOf(f.who);
+      li.append(t, span);
+      return li;
+    }));
+    tickTimer();
+  }
+
+  function statusText() {
+    if (!connected && s.phase !== "finished") return "Подключаюсь к комнате " + code + "…";
+    switch (s.phase) {
+      case "connecting": return "Комната " + code + " пока пустая. Создай её в игре: /bingo new";
+      case "lobby": return `Комната ${code} · игроков: ${[...s.players.values()].filter(p => !p.left).length} · ждём /bingo start`;
+      case "playing": return Date.now() < s.startMs ? "Старт через " + Math.ceil((s.startMs - Date.now()) / 1000)
+        : s.lockout ? "Локаут: клетка достаётся первому" : "Обычное бинго: каждый собирает свою линию";
+      case "finished": return s.winner ? `${nameOf(s.winner)} победил! Реванш: /bingo again` : "Ничья! Реванш: /bingo again";
+    }
+    return "";
+  }
+
+  let lastRevealed = false;
+  function tickTimer() {
+    const ms = s.phase === "finished" ? s.finishedMs : s.phase === "playing" ? Math.max(0, Date.now() - s.startMs) : 0;
+    timerEl.textContent = fmt(ms);
+    if (s.phase === "playing") {
+      const r = revealed();
+      if (r !== lastRevealed || Date.now() < s.startMs) { lastRevealed = r; statusEl.textContent = statusText(); if (r) render(); }
+    }
+  }
+  setInterval(tickTimer, 250);
+
+  $("join").addEventListener("submit", e => {
+    e.preventDefault();
+    const c = codeEl.value.trim().toUpperCase();
+    if (/^[A-Z0-9]{4,12}$/.test(c)) location.hash = c;
+  });
+  window.addEventListener("hashchange", () => connect(location.hash.slice(1)));
+  if (location.hash.length > 1) connect(location.hash.slice(1));
+})();
+</script>
+</body>
+</html>
